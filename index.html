@@ -685,6 +685,7 @@ let db = {
   taksitler: [],
   sabitGelirler: [],
   maas: 0,
+  maasGecmis: [],
   nextHId: 1,
   nextTId: 1,
   nextGId: 1
@@ -737,6 +738,27 @@ function showScreen(name) {
 }
 
 // ── MONTH ─────────────────────────────────────────────
+function getSabitGelirForAy(month, year) {
+  const hedef = year + '-' + String(month+1).padStart(2,'0');
+  return (db.sabitGelirler || [])
+    .filter(g => !g.baslangic || g.baslangic <= hedef)
+    .reduce((s,g) => s + g.tutar, 0);
+}
+
+function getMaasForAy(month, year) {
+  if (!db.maasGecmis || !db.maasGecmis.length) return db.maas;
+  const hedef = year + '-' + String(month+1).padStart(2,'0');
+  // O aya ait kayıt varsa onu kullan
+  // Tam eşleşme varsa onu kullan
+  const tam = db.maasGecmis.find(m => m.ay === hedef);
+  if (tam) return tam.tutar;
+  // O aydan önceki en son kaydı kullan (ileriye taşıma)
+  const oncekiler = db.maasGecmis
+    .filter(m => m.ay <= hedef)
+    .sort((a,b) => b.ay.localeCompare(a.ay));
+  return oncekiler.length ? oncekiler[0].tutar : 0;
+}
+
 function changeOzetMonth(dir) {
   ozetMonth += dir;
   if (ozetMonth > 11) { ozetMonth = 0; ozetYear++; }
@@ -762,11 +784,11 @@ function setFilter(el, filter) {
 function renderHome() {
   document.getElementById('month-label').textContent = MONTHS[viewMonth] + ' ' + viewYear;
   const aylik = getAylikHarcamalar();
-  const taksitAylik = getTaksitAylik();
+  const taksitAylik = getTaksitAylik(viewMonth, viewYear);
   const toplamGider = aylik.filter(h => h.tur === 'Gider').reduce((s,h) => s + h.miktar, 0);
   const degiskenGelir = aylik.filter(h => h.tur === 'Gelir').reduce((s,h) => s + h.miktar, 0);
-  const sabitGelirToplam = (db.sabitGelirler || []).reduce((s,g) => s + g.tutar, 0);
-  const toplamGelir = db.maas + sabitGelirToplam + degiskenGelir;
+  const sabitGelirToplam = getSabitGelirForAy(viewMonth, viewYear);
+  const toplamGelir = getMaasForAy(viewMonth, viewYear) + sabitGelirToplam + degiskenGelir;
   const kalan = toplamGelir - toplamGider - taksitAylik;
   document.getElementById('home-maas').textContent = fmt(toplamGelir);
   document.getElementById('home-gider').textContent = fmt(toplamGider);
@@ -813,7 +835,7 @@ function checkTaksitler() {
 
 function renderTaksitler() {
   checkTaksitler();
-  const aylik = getTaksitAylik();
+  const aylik = getTaksitAylik(new Date().getMonth(), new Date().getFullYear());
   const aktif = db.taksitler.filter(t => t.durum === 'Devam');
   const kalan = aktif.reduce((s,t) => {
     const gecen = aylarFarki(t.baslangicTarihi);
@@ -847,6 +869,7 @@ function renderTaksitler() {
         <div class="taksit-amt"><label>Toplam</label><span>${fmt(t.toplamTutar)}</span></div>
         <div class="taksit-amt"><label>Aylık</label><span style="color:var(--accent2)">${fmt(aylik)}</span></div>
         <div class="taksit-amt"><label>Kalan</label><span style="color:var(--danger)">${fmt(kalanTutar)}</span></div>
+        <div class="taksit-amt"><label>Bitiş</label><span style="color:var(--muted);font-size:11px">${(() => { const d = new Date(t.baslangicTarihi); d.setMonth(d.getMonth() + t.taksitSayisi - 1); return MONTHS[d.getMonth()] + ' ' + d.getFullYear(); })()}</span></div>
       </div>
     </div>`;
   }).join('');
@@ -859,10 +882,11 @@ function renderOzet() {
   const aylik = db.harcamalar.filter(h => { const d = new Date(h.tarih); return d.getMonth() === ozetMonth && d.getFullYear() === ozetYear; });
   const giderler = aylik.filter(h => h.tur === 'Gider');
   const toplamGider = giderler.reduce((s,h) => s + h.miktar, 0);
-  const sabitGelirToplam2 = (db.sabitGelirler || []).reduce((s,g) => s + g.tutar, 0);
+  const sabitGelirToplam2 = getSabitGelirForAy(ozetMonth, ozetYear);
   const degiskenGelir2 = aylik.filter(h => h.tur === 'Gelir').reduce((s,h) => s + h.miktar, 0);
-  const toplamGelir = db.maas + sabitGelirToplam2 + degiskenGelir2;
-  const taksitAylik = getTaksitAylik();
+  const maasAylik = getMaasForAy(ozetMonth, ozetYear);
+  const toplamGelir = maasAylik + sabitGelirToplam2 + degiskenGelir2;
+  const taksitAylik = getTaksitAylik(ozetMonth, ozetYear);
   const kalan = toplamGelir - toplamGider - taksitAylik;
 
   document.getElementById('oz-gelir').textContent = fmt(toplamGelir);
@@ -937,7 +961,9 @@ function renderOzet() {
 
 // ── AYARLAR ───────────────────────────────────────────
 function renderAyarlar() {
-  document.getElementById('maas-input').value = db.maas || '';
+  const buAy = new Date().getFullYear() + '-' + String(new Date().getMonth()+1).padStart(2,'0');
+  const buAyMaas = db.maasGecmis && db.maasGecmis.find(m => m.ay === buAy);
+  document.getElementById('maas-input').value = buAyMaas ? buAyMaas.tutar : (db.maas || '');
   renderSabitGelirler();
 }
 
@@ -980,7 +1006,8 @@ function addSabitGelir() {
   const customVal = document.getElementById('sg-periyot-custom').value.trim();
   if (!periyot && customVal) periyot = customVal;
   if (!periyot) periyot = 'sinirsiz';
-  db.sabitGelirler.push({ id: db.nextGId++, ad, tutar, periyot });
+  const baslangicAy = new Date().getFullYear() + '-' + String(new Date().getMonth()+1).padStart(2,'0');
+  db.sabitGelirler.push({ id: db.nextGId++, ad, tutar, periyot, baslangic: baslangicAy });
   // reset
   document.getElementById('sg-periyot').value = 'sinirsiz';
   document.getElementById('sg-periyot-custom').value = '';
@@ -1003,7 +1030,15 @@ function deleteSabitGelir(id) {
 }
 
 function saveMaas(val) {
-  db.maas = parseFloat(val) || 0;
+  const yeni = parseFloat(val) || 0;
+  const simdi = new Date();
+  const ay = simdi.getFullYear() + '-' + String(simdi.getMonth()+1).padStart(2,'0');
+  if (!db.maasGecmis) db.maasGecmis = [];
+  // Bu ay için kayıt varsa güncelle, yoksa ekle
+  const idx = db.maasGecmis.findIndex(m => m.ay === ay);
+  if (idx !== -1) db.maasGecmis[idx].tutar = yeni;
+  else db.maasGecmis.push({ ay, tutar: yeni });
+  db.maas = yeni;
   saveDB();
   showToast('Maaş güncellendi ✓');
 }
@@ -1174,9 +1209,21 @@ function getAylikHarcamalar() {
   });
 }
 
-function getTaksitAylik() {
+function getTaksitAylik(month, year) {
+  const m = month !== undefined ? month : new Date().getMonth();
+  const y = year !== undefined ? year : new Date().getFullYear();
+  const hedefStr = y + '-' + String(m+1).padStart(2,'0');
   return db.taksitler
-    .filter(t => t.durum === 'Devam')
+    .filter(t => {
+      if (t.durum !== 'Devam') return false;
+      const bas = t.baslangicTarihi.slice(0,7); // YYYY-MM
+      const bitis = (() => {
+        const d = new Date(t.baslangicTarihi);
+        d.setMonth(d.getMonth() + t.taksitSayisi - 1);
+        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+      })();
+      return bas <= hedefStr && hedefStr <= bitis;
+    })
     .reduce((s, t) => s + t.toplamTutar / t.taksitSayisi, 0);
 }
 
