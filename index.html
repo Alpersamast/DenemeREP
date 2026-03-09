@@ -745,7 +745,19 @@ function renderTxnList() {
 }
 
 // ── TAKSİT RENDER ─────────────────────────────────────
+function checkTaksitler() {
+  let changed = false;
+  db.taksitler.forEach(t => {
+    if (t.durum === 'Devam' && aylarFarki(t.baslangicTarihi) >= t.taksitSayisi) {
+      t.durum = 'Bitti';
+      changed = true;
+    }
+  });
+  if (changed) saveDB();
+}
+
 function renderTaksitler() {
+  checkTaksitler();
   const aylik = getTaksitAylik();
   const aktif = db.taksitler.filter(t => t.durum === 'Devam');
   const kalan = aktif.reduce((s,t) => {
