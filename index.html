@@ -580,7 +580,7 @@ nav {
 <div class="modal-overlay" id="taksit-modal">
   <div class="modal">
     <div class="modal-handle"></div>
-    <div class="modal-title">Taksit Ekle</div>
+    <div class="modal-title" id="taksit-modal-title">Taksit Ekle</div>
     <div class="form-field">
       <span class="fi">🛍️</span>
       <div class="fc">
@@ -609,7 +609,18 @@ nav {
         <input type="date" id="t-tarih" class="fv">
       </div>
     </div>
+    <div class="form-field">
+      <span class="fi">🔖</span>
+      <div class="fc">
+        <div class="fl">Durum</div>
+        <select id="t-durum" class="fv">
+          <option value="Devam">Devam</option>
+          <option value="Bitti">Bitti</option>
+        </select>
+      </div>
+    </div>
     <button class="save-btn" onclick="saveTaksit()">Kaydet</button>
+    <button class="del-btn" id="del-taksit-btn" style="display:none" onclick="deleteTaksit()">Sil</button>
   </div>
 </div>
 
@@ -748,7 +759,7 @@ function renderTaksitler() {
     const pct = Math.round((gecen / t.taksitSayisi) * 100);
     const kalanTutar = (t.taksitSayisi - gecen) * aylik;
     return `
-    <div class="taksit-card">
+    <div class="taksit-card" onclick="openTaksitModal(${t.id})" style="cursor:pointer">
       <div class="taksit-hdr">
         <div class="taksit-name">💳 ${t.alisverisAdi}</div>
         <div class="badge ${t.durum==='Bitti'?'bitti':''}">${t.durum}</div>
@@ -931,11 +942,28 @@ function deleteHarcama() {
 }
 
 // ── TAKSİT MODAL ──────────────────────────────────────
-function openTaksitModal() {
-  document.getElementById('t-ad').value = '';
-  document.getElementById('t-tutar').value = '';
-  document.getElementById('t-sayi').value = '';
-  document.getElementById('t-tarih').value = today();
+let editingTId = null;
+
+function openTaksitModal(id = null) {
+  editingTId = id;
+  if (id !== null) {
+    const t = db.taksitler.find(x => x.id === id);
+    document.getElementById('t-ad').value = t.alisverisAdi;
+    document.getElementById('t-tutar').value = t.toplamTutar;
+    document.getElementById('t-sayi').value = t.taksitSayisi;
+    document.getElementById('t-tarih').value = t.baslangicTarihi.slice(0, 10);
+    document.getElementById('t-durum').value = t.durum;
+    document.getElementById('taksit-modal-title').textContent = 'Taksit Düzenle';
+    document.getElementById('del-taksit-btn').style.display = 'block';
+  } else {
+    document.getElementById('t-ad').value = '';
+    document.getElementById('t-tutar').value = '';
+    document.getElementById('t-sayi').value = '';
+    document.getElementById('t-tarih').value = today();
+    document.getElementById('t-durum').value = 'Devam';
+    document.getElementById('taksit-modal-title').textContent = 'Taksit Ekle';
+    document.getElementById('del-taksit-btn').style.display = 'none';
+  }
   document.getElementById('taksit-modal').classList.add('open');
 }
 
@@ -944,12 +972,28 @@ function saveTaksit() {
   const tutar = parseFloat(document.getElementById('t-tutar').value);
   const sayi = parseInt(document.getElementById('t-sayi').value);
   const tarih = document.getElementById('t-tarih').value;
+  const durum = document.getElementById('t-durum').value;
   if (!ad || !tutar || !sayi) { showToast('Tüm alanları doldur ⚠️'); return; }
 
-  db.taksitler.push({ id: db.nextTId++, alisverisAdi: ad, toplamTutar: tutar, taksitSayisi: sayi, baslangicTarihi: tarih, durum: 'Devam' });
+  if (editingTId !== null) {
+    const idx = db.taksitler.findIndex(x => x.id === editingTId);
+    if (idx !== -1) db.taksitler[idx] = { id: editingTId, alisverisAdi: ad, toplamTutar: tutar, taksitSayisi: sayi, baslangicTarihi: tarih, durum };
+    showToast('Güncellendi ✓');
+  } else {
+    db.taksitler.push({ id: db.nextTId++, alisverisAdi: ad, toplamTutar: tutar, taksitSayisi: sayi, baslangicTarihi: tarih, durum: 'Devam' });
+    showToast('Taksit eklendi ✓');
+  }
   saveDB();
   closeModals();
-  showToast('Taksit eklendi ✓');
+  renderTaksitler();
+}
+
+function deleteTaksit() {
+  if (!confirm('Bu taksiti sil?')) return;
+  db.taksitler = db.taksitler.filter(x => x.id !== editingTId);
+  saveDB();
+  closeModals();
+  showToast('Silindi');
   renderTaksitler();
 }
 
