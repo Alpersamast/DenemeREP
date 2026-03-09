@@ -489,7 +489,7 @@ nav {
         <div style="display:flex;gap:8px;align-items:center;width:100%">
           <div class="sg-chip active" data-val="sinirsiz" onclick="selectSgPeriyot(this)" style="font-size:11px;padding:4px 12px">Sınırsız</div>
           <div class="sg-chip" data-val="custom" onclick="selectSgPeriyot(this)" style="font-size:11px;padding:4px 12px">Belirli süre</div>
-          <input id="sg-periyot-custom" type="text" placeholder="örn: 6 ay" style="display:none;flex:1;background:none;border:none;border-bottom:1px solid var(--border);outline:none;color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;padding-bottom:4px">
+          <input id="sg-periyot-custom" type="number" inputmode="numeric" min="1" placeholder="kaç ay?" style="display:none;flex:1;background:none;border:none;border-bottom:1px solid var(--border);outline:none;color:var(--accent);font-family:'DM Sans',sans-serif;font-size:14px;padding-bottom:4px;width:60px">
           <input type="hidden" id="sg-periyot" value="sinirsiz">
           <button onclick="addSabitGelir()" style="margin-left:auto;padding:7px 18px;border-radius:10px;background:var(--accent);color:#000;border:none;font-weight:800;font-size:12px;cursor:pointer;font-family:'Syne',sans-serif;letter-spacing:1px">EKLE</button>
         </div>
@@ -763,6 +763,7 @@ function getSabitGelirForAy(month, year) {
     .filter(g => {
       if (g.baslangic && g.baslangic > hedef) return false;
       if (g.silindiTarih && g.silindiTarih <= hedef) return false;
+      if (g.bitisAy && g.bitisAy <= hedef) return false;
       return true;
     })
     .reduce((s,g) => s + g.tutar, 0);
@@ -1000,7 +1001,7 @@ function renderSabitGelirler() {
       <div class="si-icon">${g.silindiTarih ? '⏸️' : '💰'}</div>
       <div class="si-content">
         <div class="si-label">${g.ad}</div>
-        <div class="si-sub">${fmt(g.tutar)} · ${g.periyot === 'sinirsiz' ? 'Sınırsız' : g.periyot} · <span style="color:var(--accent)">▶ ${ayFormat(g.baslangic)}</span>${g.silindiTarih ? ` · <span style="color:var(--danger)">⏹ ${ayFormat(g.silindiTarih)}</span>` : ''}</div>
+        <div class="si-sub">${fmt(g.tutar)} · ${g.periyot === 'sinirsiz' ? 'Sınırsız' : g.periyot} · <span style="color:var(--accent)">▶ ${ayFormat(g.baslangic)}</span>${g.bitisAy ? ` · <span style="color:var(--danger)">⏹ ${ayFormat(g.bitisAy)}</span>` : ''}</div>
       </div>
       ${g.silindiTarih ? '' : `<button onclick="deleteSabitGelir(${g.id})" style="background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.2);color:var(--danger);border-radius:8px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer;flex-shrink:0">Sil</button>`}
     </div>
@@ -1028,11 +1029,17 @@ function addSabitGelir() {
   if (!ad || !tutar) { showToast('Ad ve tutar gir ⚠️'); return; }
   if (!db.sabitGelirler) db.sabitGelirler = [];
   let periyot = document.getElementById('sg-periyot').value;
-  const customVal = document.getElementById('sg-periyot-custom').value.trim();
-  if (!periyot && customVal) periyot = customVal;
+  const customVal = parseInt(document.getElementById('sg-periyot-custom').value);
+  if (periyot === 'custom') periyot = customVal > 0 ? customVal + ' ay' : 'sinirsiz';
   if (!periyot) periyot = 'sinirsiz';
-  const baslangicAy = new Date().getFullYear() + '-' + String(new Date().getMonth()+1).padStart(2,'0');
-  db.sabitGelirler.push({ id: db.nextGId++, ad, tutar, periyot, baslangic: baslangicAy });
+  const now = new Date();
+  const baslangicAy = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  let bitisAy = null;
+  if (periyot !== 'sinirsiz' && customVal > 0) {
+    const bd = new Date(now.getFullYear(), now.getMonth() + customVal, 1);
+    bitisAy = bd.getFullYear() + '-' + String(bd.getMonth()+1).padStart(2,'0');
+  }
+  db.sabitGelirler.push({ id: db.nextGId++, ad, tutar, periyot, baslangic: baslangicAy, bitisAy });
   // reset
   document.getElementById('sg-periyot').value = 'sinirsiz';
   document.getElementById('sg-periyot-custom').value = '';
@@ -1049,7 +1056,9 @@ function addSabitGelir() {
 function deleteSabitGelir(id) {
   const g = (db.sabitGelirler || []).find(x => x.id === id);
   if (!g) return;
-  const buAy = new Date().getFullYear() + '-' + String(new Date().getMonth()+1).padStart(2,'0');
+  const buAy = viewYear + '-' + String(viewMonth+1).padStart(2,'0');
+  // Eğer belirlenen bitiş bu aydan sonraysa, bitişi bu aya çek
+  g.bitisAy = buAy;
   g.silindiTarih = buAy;
   saveDB();
   renderSabitGelirler();
