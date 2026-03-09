@@ -999,11 +999,10 @@ function saveTaksit() {
 }
 
 function deleteTaksit() {
-  if (!confirm('Bu taksiti sil?')) return;
   db.taksitler = db.taksitler.filter(x => x.id !== editingTId);
   saveDB();
   closeModals();
-  showToast('Silindi');
+  showToast("Taksit silindi");
   renderTaksitler();
 }
 
