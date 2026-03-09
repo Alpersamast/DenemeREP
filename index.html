@@ -486,6 +486,16 @@ nav {
         </div>
       </div>
     </div>
+    <div class="settings-section">
+      <div class="settings-title">Uygulama</div>
+      <div class="settings-item" style="cursor:pointer" onclick="forceUpdate()">
+        <div class="si-icon">🔄</div>
+        <div class="si-content">
+          <div class="si-label">Güncellemeyi Kontrol Et</div>
+          <div class="si-sub">Verilerini koruyarak uygulamayı yenile</div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- BOTTOM NAV -->
@@ -1059,9 +1069,27 @@ function exportData() {
   a.click();
 }
 
+function forceUpdate() {
+  // Veriyi sakla
+  const backup = localStorage.getItem('finans_db');
+  // Sayfayı cache'siz yenile
+  window.location.reload(true);
+  // Veriyi geri yükle (reload sonrası loadDB zaten yapıyor)
+}
+
 // ── INIT ─────────────────────────────────────────────
 loadDB();
 renderHome();
+
+// ── AUTO UPDATE ──────────────────────────────────────
+// Her açılışta arka planda güncelleme kontrol et
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.getRegistrations().then(regs => {
+      regs.forEach(reg => reg.unregister());
+    });
+  });
+}
 </script>
 </body>
 </html>
