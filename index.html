@@ -777,7 +777,7 @@ function renderTaksitler() {
 
   list.innerHTML = db.taksitler.map(t => {
     const aylik = t.toplamTutar / t.taksitSayisi;
-    const gecen = Math.min(aylarFarki(t.baslangicTarihi), t.taksitSayisi);
+    const gecen = Math.max(0, Math.min(aylarFarki(t.baslangicTarihi), t.taksitSayisi));
     const pct = Math.round((gecen / t.taksitSayisi) * 100);
     const kalanTutar = (t.taksitSayisi - gecen) * aylik;
     return `
